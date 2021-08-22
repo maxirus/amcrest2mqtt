@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 ### Added
 - Initial Helm Chart
+### Fixed
+- Ping failing [#1](https://github.com/maxirus/amcrest2mqtt/issues/1)
+- MQTT Client ID collision [#2](https://github.com/maxirus/amcrest2mqtt/issues/2)
 
 ## [1.1.0] - 2021-08-21
 ### Updated
