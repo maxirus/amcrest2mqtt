@@ -8,6 +8,7 @@ from json import dumps
 import signal
 from threading import Timer
 import ssl
+import uuid
 
 is_exiting = False
 mqtt_client = None
@@ -100,10 +101,10 @@ def refresh_storage_sensors():
 
 def ping_camera():
     Timer(30, ping_camera).start()
-    response = os.system(f"ping -c1 -W100 {amcrest_host} >/dev/null 2>&1")
-
-    if response != 0:
-        log("Ping unsuccessful", level="ERROR")
+    try:
+        camera.version_http_api
+    except:
+        log("Camera unreachable", level="ERROR")
         exit_gracefully(1)
 
 def signal_handler(sig, frame):
@@ -185,7 +186,7 @@ topics = {
 
 # Connect to MQTT
 mqtt_client = mqtt.Client(
-    client_id=f"amcrest2mqtt_{serial_number}", clean_session=False
+    client_id=f"amcrest2mqtt_{uuid.uuid1().hex}", clean_session=False
 )
 mqtt_client.on_disconnect = on_mqtt_disconnect
 mqtt_client.will_set(topics["status"], payload="offline", qos=mqtt_qos, retain=True)
