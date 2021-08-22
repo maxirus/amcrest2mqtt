@@ -1,4 +1,4 @@
-FROM python:3.9-alpine as base
+FROM python:3.9-slim-buster as base
 FROM base as builder
 
 RUN mkdir /install
