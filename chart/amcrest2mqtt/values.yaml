@@ -25,7 +25,7 @@ amcrest:
   secretName: ""
 
 mqtt:
-  host: ""
+  host: "localhost"
   port: 1883
   qos: 0
   username: admin
