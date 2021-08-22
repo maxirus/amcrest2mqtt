@@ -1,0 +1,21 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "amcrest2mqtt.fullname" . }}-env
+  labels:
+    {{- include "amcrest2mqtt.labels" . | nindent 4 }}
+data:
+  AMCREST_HOST: "{{ .Values.amcrest.host }}"
+  AMCREST_PORT: "{{ .Values.amcrest.port }}"
+  AMCREST_USERNAME: {{ .Values.amcrest.username }}
+  {{- if (not .Values.amcrest.useExistingSecret) }}
+  AMCREST_PASSWORD: {{ .Values.amcrest.password }}
+  {{- end }}
+  STORAGE_POLL_INTERVAL: "{{ .Values.amcrest.storagePollInterval }}"
+  MQTT_HOST: {{ .Values.mqtt.host }}
+  MQTT_PORT: "{{ .Values.mqtt.port }}"
+  MQTT_QOS: "{{ .Values.mqtt.qos }}"
+  MQTT_USERNAME: {{ .Values.mqtt.username }}
+  {{- if (not .Values.mqtt.useExistingSecret) }}
+  MQTT_PASSWORD: {{ .Values.mqtt.password }}
+  {{- end }}
