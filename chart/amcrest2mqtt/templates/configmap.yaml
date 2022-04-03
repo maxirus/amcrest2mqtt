@@ -19,3 +19,5 @@ data:
   {{- if (not .Values.mqtt.useExistingSecret) }}
   MQTT_PASSWORD: {{ .Values.mqtt.password }}
   {{- end }}
+  HOME_ASSISTANT: "{{ .Values.homeAssistant.enabled }}"
+  HOME_ASSISTANT_PREFIX: "{{ .Values.homeAssistant.prefix }}"
