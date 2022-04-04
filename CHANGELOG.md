@@ -13,7 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - License
 - Dependencies
 ### Fixed
-- Bumped version
+- Bumped amcrest2mqtt version to `v1.0.15`
 - Size reports in GB
 
 ## [1.1.1] - 2021-08-22
