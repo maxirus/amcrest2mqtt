@@ -1,6 +1,9 @@
+import logging
+from datetime import datetime, timezone
+from requests import get as req_get
+from requests.exceptions import RequestException
 from slugify import slugify
 from amcrest import AmcrestCamera, AmcrestError
-from datetime import datetime, timezone
 import paho.mqtt.client as mqtt
 import os
 import sys
@@ -9,21 +12,38 @@ import signal
 from threading import Timer
 import ssl
 
+# logging.basicConfig(format='%(asctime)s [%(levelname)s] %(message)s', level=logging.INFO)
+logger = logging.getLogger(__name__)
+num_log_level = getattr(logging, os.getenv("LOG_LEVEL", "INFO").upper())
+if not isinstance(num_log_level, int):
+    raise ValueError('Invalid log level: %s' % os.getenv("LOG_LEVEL", "INFO"))
+logger.setLevel(num_log_level)
+# if os.getenv("DEBUG") == "true":
+#     logger.setLevel(logging.DEBUG)
+ch = logging.StreamHandler()
+ch.setLevel(num_log_level)
+formatter = logging.Formatter('%(asctime)s - %(name)s [%(levelname)s] - %(message)s')
+ch.setFormatter(formatter)
+logger.addHandler(ch)
+
 is_exiting = False
 mqtt_client = None
 
 # Read env variables
 amcrest_host = os.getenv("AMCREST_HOST")
 amcrest_port = int(os.getenv("AMCREST_PORT") or 80)
+logger.debug("AMCREST_HOST:AMCREST_PORT:  %s:%s", amcrest_host, amcrest_port)
 amcrest_username = os.getenv("AMCREST_USERNAME") or "admin"
 amcrest_password = os.getenv("AMCREST_PASSWORD")
 
 storage_poll_interval = int(os.getenv("STORAGE_POLL_INTERVAL") or 3600)
 device_name = os.getenv("DEVICE_NAME")
+logger.debug("DEVICE_NAME: %s", device_name)
 
 mqtt_host = os.getenv("MQTT_HOST") or "localhost"
 mqtt_qos = int(os.getenv("MQTT_QOS") or 0)
 mqtt_port = int(os.getenv("MQTT_PORT") or 1883)
+logger.debug("MQTT_HOST:MQTT_PORT: %s:%s", mqtt_host, mqtt_port)
 mqtt_username = os.getenv("MQTT_USERNAME")
 mqtt_password = os.getenv("MQTT_PASSWORD")  # can be None
 mqtt_tls_enabled = os.getenv("MQTT_TLS_ENABLED") == "true"
@@ -32,7 +52,9 @@ mqtt_tls_cert = os.getenv("MQTT_TLS_CERT")
 mqtt_tls_key = os.getenv("MQTT_TLS_KEY")
 
 home_assistant = os.getenv("HOME_ASSISTANT") == "true"
+logger.debug("HOME_ASSISTANT: %s", home_assistant)
 home_assistant_prefix = os.getenv("HOME_ASSISTANT_PREFIX") or "homeassistant"
+logger.debug("HOME_ASSISTANT_PREFIX: %s", home_assistant_prefix)
 
 def read_file(file_name):
     with open(file_name, 'r') as file:
@@ -49,11 +71,12 @@ def read_version():
 # Helper functions and callbacks
 def log(msg, level="INFO"):
     ts = datetime.now(timezone.utc).strftime("%d/%m/%Y %H:%M:%S")
-    print(f"{ts} [{level}] {msg}")
+    print(f"TODO: {ts} [{level}] {msg}")
 
 def mqtt_publish(topic, payload, exit_on_error=True, json=False):
     global mqtt_client
 
+    logger.debug("MQTT Publish to topic=\"%s\", msg=\"%s\"", topic, dumps(payload) if json else payload)
     msg = mqtt_client.publish(
         topic, payload=(dumps(payload) if json else payload), qos=mqtt_qos, retain=True
     )
@@ -62,20 +85,23 @@ def mqtt_publish(topic, payload, exit_on_error=True, json=False):
         msg.wait_for_publish()
         return msg
 
-    log(f"Error publishing MQTT message: {mqtt.error_string(msg.rc)}", level="ERROR")
+    logger.error("Error publishing MQTT message: %s", mqtt.error_string(msg.rc))
+    # log(f"Error publishing MQTT message: {mqtt.error_string(msg.rc)}", level="ERROR")
 
     if exit_on_error:
         exit_gracefully(msg.rc, skip_mqtt=True)
 
 def on_mqtt_disconnect(client, userdata, rc):
     if rc != 0:
-        log(f"Unexpected MQTT disconnection", level="ERROR")
+        # log(f"Unexpected MQTT disconnection", level="ERROR")
+        logger.error("Unexpected MQTT disconnection")
         exit_gracefully(rc, skip_mqtt=True)
 
 def exit_gracefully(rc, skip_mqtt=False):
     global topics, mqtt_client
 
-    log("Exiting app...")
+    # log("Exiting app...")
+    logger.info("Exiting app...")
 
     if mqtt_client is not None and mqtt_client.is_connected() and skip_mqtt == False:
         mqtt_publish(topics["status"], "offline", exit_on_error=False)
@@ -90,7 +116,8 @@ def refresh_storage_sensors():
     global camera, topics, storage_poll_interval
 
     Timer(storage_poll_interval, refresh_storage_sensors).start()
-    log("Fetching storage sensors...")
+    # log("Fetching storage sensors...")
+    logger.info("Fetching storage sensors...")
 
     try:
         storage = camera.storage_all
@@ -106,11 +133,16 @@ def to_gb(total):
 
 def ping_camera():
     Timer(30, ping_camera).start()
-    response = os.system(f"ping -c1 -W100 {amcrest_host} >/dev/null 2>&1")
+    try:
+        r = req_get(f"http://{amcrest_host}:{amcrest_port}/health")
+    except RequestException as e:
+        logger.error("Unable to reach Amcrest Camera")
+        raise exit_gracefully(1)
+    # response = os.system(f"ping -c1 -W100 {amcrest_host} >/dev/null 2>&1")
 
-    if response != 0:
-        log("Ping unsuccessful", level="ERROR")
-        exit_gracefully(1)
+    # if response != 0:
+    #     log("Ping unsuccessful", level="ERROR")
+    #     exit_gracefully(1)
 
 def signal_handler(sig, frame):
     # exit immediately upon receiving a second SIGINT
@@ -137,7 +169,7 @@ if mqtt_username is None:
 
 version = read_version()
 
-log(f"App Version: {version}")
+logger.info("App Version: %s", version)
 
 # Handle interruptions
 signal.signal(signal.SIGINT, signal_handler)
@@ -148,7 +180,8 @@ camera = AmcrestCamera(
 ).camera
 
 # Fetch camera details
-log("Fetching camera details...")
+# log("Fetching camera details...")
+logger.info("Fetching camera details...")
 
 try:
     device_type = camera.device_type.replace("type=", "").strip()
@@ -156,24 +189,32 @@ try:
     is_ad410 = device_type == "AD410"
     is_doorbell = is_ad110 or is_ad410
     serial_number = camera.serial_number
+    logger.info("Device Type: %s", device_type)
+    logger.info("Doorbell detected: %s", str(is_doorbell))
+    logger.debug("Serial Number: %s", serial_number)
 
     if not isinstance(serial_number, str):
-        log(f"Error fetching serial number", level="ERROR")
+        # log(f"Error fetching serial number", level="ERROR")
+        logger.error("Error fetching serial number. Exiting...")
         exit_gracefully(1)
 
     sw_version = camera.software_information[0].replace("version=", "").strip()
+    logger.debug("Camera SW Version: %s", sw_version)
     if not device_name:
         device_name = camera.machine_name.replace("name=", "").strip()
+        logger.info("Device Name not set, setting to %s", device_name)
 
     device_slug = slugify(device_name, separator="_")
+    logger.debug("Device Slug set to \"%s\"", device_slug)
 except AmcrestError as error:
-    log(f"Error fetching camera details", level="ERROR")
+    # log(f"Error fetching camera details", level="ERROR")
+    logger.error("Error fetching camera details")
     exit_gracefully(1)
 
-log(f"Device type: {device_type}")
-log(f"Serial number: {serial_number}")
-log(f"Software version: {sw_version}")
-log(f"Device name: {device_name}")
+# log(f"Device type: {device_type}")
+# log(f"Serial number: {serial_number}")
+# log(f"Software version: {sw_version}")
+# log(f"Device name: {device_name}")
 
 # MQTT topics
 topics = {
@@ -246,7 +287,8 @@ except ConnectionError as error:
 
 # Configure Home Assistant
 if home_assistant:
-    log("Writing Home Assistant discovery config...")
+    # log("Writing Home Assistant discovery config...")
+    logger.info("Writing Home Assistant discovery config...")
 
     base_config = {
         "availability_topic": topics["status"],
@@ -430,6 +472,7 @@ try:
             mqtt_publish(topics["motion"], motion_payload)
         elif code == "CrossRegionDetection" and payload["data"]["ObjectType"] == "Human":
             human_payload = "on" if payload["action"] == "Start" else "off"
+            logger.debug("Human detected")
             mqtt_publish(topics["human"], human_payload)
         elif code == "_DoTalkAction_":
             doorbell_payload = "on" if payload["data"]["Action"] == "Invite" else "off"

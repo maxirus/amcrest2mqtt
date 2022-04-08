@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ## [1.2.0] - 2022-04-03
+### Added
+- `LOG_LEVEL` ENV Var to control the level of logging
 ### Updated
 - Home Assistant support
 - Documentation
@@ -15,6 +17,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - Bumped amcrest2mqtt version to `v1.0.15`
 - Size reports in GB
+- ping command now uses an HTTP Request instead of `ping` unix command
+- Logging now properly implemented
 
 ## [1.1.1] - 2021-08-22
 ### Added
